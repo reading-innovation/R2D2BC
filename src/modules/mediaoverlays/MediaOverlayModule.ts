@@ -37,12 +37,14 @@ import log from "loglevel";
 // Read Aloud
 
 export interface MediaOverlayModuleAPI {
-  started: any;
-  stopped: any;
-  paused: any;
-  resumed: any;
-  finished: any;
-  updateSettings: any;
+  started?: any;
+  stopped?: any;
+  paused?: any;
+  resumed?: any;
+  finished?: any;
+  updateSettings?: any;
+
+  segmentEnded?: any;
 }
 export interface MediaOverlayModuleProperties {
   color?: string;
@@ -88,12 +90,14 @@ export class MediaOverlayModule implements ReaderModule {
 
   private mediaOverlayNodesForSegment: MediaOverlayNode[] = [];
   private isSegmentMode: boolean = false;
+  api?: MediaOverlayModuleAPI;
 
   public static create(config: MediaOverlayModuleConfig) {
     const mediaOverlay = new this(
       config.publication,
       config.settings,
-      config as MediaOverlayModuleProperties
+      config as MediaOverlayModuleProperties,
+      config.api
     );
     mediaOverlay.start();
     return mediaOverlay;
@@ -102,11 +106,13 @@ export class MediaOverlayModule implements ReaderModule {
   private constructor(
     publication: Publication,
     settings: MediaOverlaySettings,
-    properties: MediaOverlayModuleProperties
+    properties: MediaOverlayModuleProperties,
+    api?: MediaOverlayModuleAPI
   ) {
     this.publication = publication;
     this.settings = settings;
     this.properties = properties;
+    this.api = api;
   }
 
   stop() {
@@ -577,6 +583,7 @@ export class MediaOverlayModule implements ReaderModule {
             this.mediaOverlayTextAudioPair = undefined;
             this.mediaOverlayNodesForSegment = [];
             this.stopReadAloud();
+            this.api?.segmentEnded?.();
             return;
           }
 
