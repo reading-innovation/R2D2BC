@@ -29,6 +29,8 @@ interface Navigator {
 
   startReadAloud?(): void;
 
+  startReadAloudBySegment?(startTime: number, endTime: number): void;
+
   stopReadAloud?(): void;
 
   pauseReadAloud?(): void;
