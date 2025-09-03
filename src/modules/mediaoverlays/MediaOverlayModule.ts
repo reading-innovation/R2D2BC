@@ -287,6 +287,12 @@ export class MediaOverlayModule implements ReaderModule {
             return;
           }
 
+          this.mediaOverlayNodesForSegment.sort((a, b) => {
+            const aStartTime = this.getAudioTimeRangeFromNode(a)?.[0];
+            const bStartTime = this.getAudioTimeRangeFromNode(b)?.[0];
+            return Number(aStartTime) - Number(bStartTime);
+          });
+
           const firstNodeTimeRange = this.getAudioTimeRangeFromNode(
             this.mediaOverlayNodesForSegment[0]
           );
@@ -306,12 +312,6 @@ export class MediaOverlayModule implements ReaderModule {
               return;
             }
           }
-
-          this.mediaOverlayNodesForSegment.sort((a, b) => {
-            const aStartTime = this.getAudioTimeRangeFromNode(a)?.[0];
-            const bStartTime = this.getAudioTimeRangeFromNode(b)?.[0];
-            return Number(aStartTime) - Number(bStartTime);
-          });
 
           this.mediaOverlayTextAudioPair = this.mediaOverlayNodesForSegment[0];
 
