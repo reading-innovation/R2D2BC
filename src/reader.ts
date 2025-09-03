@@ -337,6 +337,7 @@ export default class D2Reader {
             publication: publication,
             settings: mediaOverlaySettings,
             ...initialConfig.mediaOverlays,
+            api: initialConfig.mediaOverlays?.api,
           })
         : undefined;
 

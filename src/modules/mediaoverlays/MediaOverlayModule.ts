@@ -271,23 +271,47 @@ export class MediaOverlayModule implements ReaderModule {
             startTime,
             endTime
           );
+
+          if (this.mediaOverlayNodesForSegment.length === 0) {
+            if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
+              this.currentLinkIndex++;
+              this.startReadAloudBySegment(startTime, endTime);
+              return;
+            } else {
+              console.error(
+                "No matching node found for time range",
+                startTime,
+                endTime
+              );
+            }
+            return;
+          }
+
           const firstNodeTimeRange = this.getAudioTimeRangeFromNode(
             this.mediaOverlayNodesForSegment[0]
           );
+          const lastNodeTimeRange = this.getAudioTimeRangeFromNode(
+            this.mediaOverlayNodesForSegment[
+              this.mediaOverlayNodesForSegment.length - 1
+            ]
+          );
+
+          if (
+            firstNodeTimeRange?.[0] !== startTime ||
+            lastNodeTimeRange?.[1] !== endTime
+          ) {
+            if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
+              this.currentLinkIndex++;
+              this.startReadAloudBySegment(startTime, endTime);
+              return;
+            }
+          }
+
           this.mediaOverlayNodesForSegment.sort((a, b) => {
             const aStartTime = this.getAudioTimeRangeFromNode(a)?.[0];
             const bStartTime = this.getAudioTimeRangeFromNode(b)?.[0];
             return Number(aStartTime) - Number(bStartTime);
           });
-
-          if (this.mediaOverlayNodesForSegment.length === 0) {
-            console.error(
-              "No matching node found for time range",
-              startTime,
-              endTime
-            );
-            return;
-          }
 
           this.mediaOverlayTextAudioPair = this.mediaOverlayNodesForSegment[0];
 
