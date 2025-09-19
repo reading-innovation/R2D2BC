@@ -29,7 +29,13 @@ interface Navigator {
 
   startReadAloud?(): void;
 
-  startReadAloudBySegment?(startTime: number, endTime: number): void;
+  startReadAloudBySegment?({
+    startTime,
+    endTime,
+  }: {
+    startTime: number;
+    endTime: number;
+  }): void;
 
   stopReadAloud?(): void;
 

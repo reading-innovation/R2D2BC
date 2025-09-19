@@ -36,6 +36,21 @@ import log from "loglevel";
 // Read Along
 // Read Aloud
 
+const MARGIN_OF_ERROR = 0.01;
+
+const checkIsTimeInRange = ({
+  currentTime,
+  targetTime,
+}: {
+  currentTime: number;
+  targetTime: number;
+}) => {
+  return (
+    currentTime >= targetTime - MARGIN_OF_ERROR &&
+    currentTime <= targetTime + MARGIN_OF_ERROR
+  );
+};
+
 export interface MediaOverlayModuleAPI {
   started?: any;
   stopped?: any;
@@ -242,7 +257,13 @@ export class MediaOverlayModule implements ReaderModule {
     }
   }
 
-  async startReadAloudBySegment(startTime: number, endTime: number) {
+  async startReadAloudBySegment({
+    startTime,
+    endTime,
+  }: {
+    startTime: number;
+    endTime: number;
+  }) {
     if (this.navigator.rights.enableMediaOverlays) {
       if (
         this.isSegmentMode &&
@@ -275,7 +296,7 @@ export class MediaOverlayModule implements ReaderModule {
           if (this.mediaOverlayNodesForSegment.length === 0) {
             if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
               this.currentLinkIndex++;
-              this.startReadAloudBySegment(startTime, endTime);
+              this.startReadAloudBySegment({ startTime, endTime });
               return;
             } else {
               console.error(
@@ -303,12 +324,18 @@ export class MediaOverlayModule implements ReaderModule {
           );
 
           if (
-            firstNodeTimeRange?.[0] !== startTime ||
-            lastNodeTimeRange?.[1] !== endTime
+            checkIsTimeInRange({
+              currentTime: firstNodeTimeRange?.[0] || 0,
+              targetTime: startTime,
+            }) ||
+            checkIsTimeInRange({
+              currentTime: lastNodeTimeRange?.[1] || 0,
+              targetTime: endTime,
+            })
           ) {
             if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
               this.currentLinkIndex++;
-              this.startReadAloudBySegment(startTime, endTime);
+              this.startReadAloudBySegment({ startTime, endTime });
               return;
             }
           }
@@ -408,7 +435,12 @@ export class MediaOverlayModule implements ReaderModule {
       if (nodeTimeRange) {
         const [nodeStart, nodeEnd] = nodeTimeRange;
         if (
-          this.isTimeRangeOverlapping(startTime, endTime, nodeStart, nodeEnd) &&
+          this.isNodeIncludedInSegment({
+            segmentStart: startTime,
+            segmentEnd: endTime,
+            nodeStart: nodeStart,
+            nodeEnd: nodeEnd,
+          }) &&
           this.mediaOverlayNodesForSegment.findIndex(
             (node) => node.Text === mo.Text
           ) === -1
@@ -465,13 +497,15 @@ export class MediaOverlayModule implements ReaderModule {
     return undefined;
   }
 
-  private isTimeRangeOverlapping(
-    start1: number,
-    end1: number,
-    start2: number,
-    end2: number
-  ): boolean {
-    return start1 <= start2 && end1 >= end2;
+  private isNodeIncludedInSegment(prop: {
+    segmentStart: number;
+    segmentEnd: number;
+    nodeStart: number;
+    nodeEnd: number;
+  }): boolean {
+    return (
+      prop.segmentStart <= prop.nodeStart && prop.segmentEnd >= prop.nodeEnd
+    );
   }
 
   async stopReadAloud() {
@@ -595,6 +629,7 @@ export class MediaOverlayModule implements ReaderModule {
 
           if (
             this.isSegmentMode &&
+            this.mediaOverlayNodesForSegment.length > 0 &&
             this.currentAudioEnd ===
               this.getAudioTimeRangeFromNode(
                 this.mediaOverlayNodesForSegment[

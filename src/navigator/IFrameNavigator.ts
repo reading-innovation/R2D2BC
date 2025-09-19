@@ -2216,13 +2216,19 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
       ttsModule.speakPlay();
     }
   }
-  startReadAloudBySegment(startTime: number, endTime: number) {
+  startReadAloudBySegment({
+    startTime,
+    endTime,
+  }: {
+    startTime: number;
+    endTime: number;
+  }) {
     if (
       this.rights.enableMediaOverlays &&
-      this.mediaOverlayModule !== undefined &&
+      this.mediaOverlayModule?.startReadAloudBySegment !== undefined &&
       this.hasMediaOverlays
     ) {
-      this.mediaOverlayModule?.startReadAloudBySegment(startTime, endTime);
+      this.mediaOverlayModule.startReadAloudBySegment({ startTime, endTime });
     }
   }
   startReadAlong() {

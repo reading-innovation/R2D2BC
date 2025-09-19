@@ -476,9 +476,15 @@ export default class D2Reader {
   };
 
   /** Start TTS Read Aloud Segment */
-  startReadAloudBySegment = (startTime: number, endTime: number) => {
+  startReadAloudBySegment = ({
+    startTime,
+    endTime,
+  }: {
+    startTime: number;
+    endTime: number;
+  }) => {
     if (this.navigator instanceof IFrameNavigator) {
-      this.navigator.startReadAloudBySegment(startTime, endTime);
+      this.navigator.startReadAloudBySegment({ startTime, endTime });
     }
   };
 
