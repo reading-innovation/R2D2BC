@@ -337,6 +337,7 @@ export default class D2Reader {
             publication: publication,
             settings: mediaOverlaySettings,
             ...initialConfig.mediaOverlays,
+            api: initialConfig.mediaOverlays?.api,
           })
         : undefined;
 
@@ -389,7 +390,7 @@ export default class D2Reader {
         requestConfig: initialConfig.requestConfig,
         injectables:
           (publication.Metadata.Rendition?.Layout ?? "unknown") === "fixed"
-            ? initialConfig.injectablesFixed ?? []
+            ? (initialConfig.injectablesFixed ?? [])
             : initialConfig.injectables,
         attributes: initialConfig.attributes,
         services: initialConfig.services,
@@ -473,6 +474,20 @@ export default class D2Reader {
       this.navigator.startReadAlong();
     }
   };
+
+  /** Start TTS Read Aloud Segment */
+  startReadAloudBySegment = ({
+    startTime,
+    endTime,
+  }: {
+    startTime: number;
+    endTime: number;
+  }) => {
+    if (this.navigator instanceof IFrameNavigator) {
+      this.navigator.startReadAloudBySegment({ startTime, endTime });
+    }
+  };
+
   /** Stop Media Overlay Read Along */
   stopReadAlong = () => {
     if (this.navigator instanceof IFrameNavigator) {
@@ -522,9 +537,9 @@ export default class D2Reader {
   addAnnotation = async (highlight: Annotation) => {
     return (await this.annotationModule?.addAnnotation(highlight)) ?? false;
   };
-  /** 
+  /**
    * Update annotation
-   * 
+   *
    * This should be used only when the add/delete of the annotation note
    * is not directly handled in the `addAnnotation`/`addCommentToAnnotation`
    * callback defined in the configuration of the D2Reader.load() method
