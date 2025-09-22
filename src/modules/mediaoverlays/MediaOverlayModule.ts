@@ -45,10 +45,7 @@ const checkIsTimeInRange = ({
   currentTime: number;
   targetTime: number;
 }) => {
-  return (
-    currentTime >= targetTime - MARGIN_OF_ERROR &&
-    currentTime <= targetTime + MARGIN_OF_ERROR
-  );
+  return Math.abs(currentTime - targetTime) <= MARGIN_OF_ERROR;
 };
 
 export interface MediaOverlayModuleAPI {
