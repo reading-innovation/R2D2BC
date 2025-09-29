@@ -148,9 +148,15 @@ export class MediaOverlayModule implements ReaderModule {
     });
   }
 
-  async initializeResource(links: Array<Link | undefined>) {
+  async initializeResource({
+    links,
+    index,
+  }: {
+    links: Array<Link | undefined>;
+    index?: number;
+  }) {
     this.currentLinks = links;
-    this.currentLinkIndex = 0;
+    this.currentLinkIndex = index ?? 0;
     await this.playLink();
   }
 
@@ -301,6 +307,9 @@ export class MediaOverlayModule implements ReaderModule {
                 startTime,
                 endTime
               );
+
+              this.isSegmentMode = false;
+              this.settings.playing = false;
             }
             return;
           }
@@ -321,17 +330,18 @@ export class MediaOverlayModule implements ReaderModule {
           );
 
           if (
-            checkIsTimeInRange({
+            !checkIsTimeInRange({
               currentTime: firstNodeTimeRange?.[0] || 0,
               targetTime: startTime,
             }) ||
-            checkIsTimeInRange({
+            !checkIsTimeInRange({
               currentTime: lastNodeTimeRange?.[1] || 0,
               targetTime: endTime,
             })
           ) {
             if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
               this.currentLinkIndex++;
+              this.mediaOverlayNodesForSegment = [];
               this.startReadAloudBySegment({ startTime, endTime });
               return;
             }
@@ -618,10 +628,17 @@ export class MediaOverlayModule implements ReaderModule {
 
     if (this.mediaOverlayTextAudioPair) {
       try {
-        if (
+        const isEndTimeReached =
           this.currentAudioEnd &&
-          this.audioElement.currentTime >= this.currentAudioEnd - 0.05
-        ) {
+          this.audioElement.currentTime >= this.currentAudioEnd - 0.05;
+
+        // This handles the case where the audio is shorter than the segment end time
+        const isEndTimeReachedByDuration =
+          this.currentAudioEnd &&
+          this.audioElement.duration < this.currentAudioEnd &&
+          this.audioElement.currentTime >= this.audioElement.duration - 0.05;
+
+        if (isEndTimeReached || isEndTimeReachedByDuration) {
           log.log("ontimeupdate - mediaOverlaysNext()");
 
           if (
@@ -634,6 +651,19 @@ export class MediaOverlayModule implements ReaderModule {
                 ]
               )?.[1]
           ) {
+            if (this.pid) {
+              const prevElement = this.navigator.iframes[
+                this.currentLinkIndex
+              ].contentDocument?.getElementById(this.pid);
+              if (prevElement) {
+                let classActive =
+                  this.publication.Metadata?.MediaOverlay?.ActiveClass ||
+                  R2_MO_CLASS_ACTIVE;
+
+                prevElement.classList.remove(classActive);
+              }
+            }
+
             this.currentAudioBegin = undefined;
             this.currentAudioEnd = undefined;
             this.mediaOverlayTextAudioPair = undefined;
