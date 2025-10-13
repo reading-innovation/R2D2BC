@@ -1590,7 +1590,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.hasMediaOverlays
         ) {
           let link = this.currentLink();
-          let index = this.settings.columnCount === 1 ? 0 : link[0] ? 0 : 1;
+          let index = this.settings.columnCount === 1 || link[0] ? 0 : 1;
           await this.mediaOverlayModule?.initializeResource({
             links: link,
             index,
