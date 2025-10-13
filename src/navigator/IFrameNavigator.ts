@@ -1590,7 +1590,11 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.hasMediaOverlays
         ) {
           let link = this.currentLink();
-          await this.mediaOverlayModule?.initializeResource(link);
+          let index = this.settings.columnCount === 1 || link[0] ? 0 : 1;
+          await this.mediaOverlayModule?.initializeResource({
+            links: link,
+            index,
+          });
         }
         await this.updatePositionInfo();
         await this.view?.setSize();
@@ -2301,18 +2305,14 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
   }
   currentLink(): Array<Link | undefined> {
     if (this.settings.columnCount !== 1) {
-      if (
-        this.currentSpreadLinks.left !== undefined &&
-        this.currentSpreadLinks.right !== undefined
-      ) {
-        let left = this.publication.getSpineItem(
-          this.currentSpreadLinks.left.href
-        );
-        let right = this.publication.getSpineItem(
-          this.currentSpreadLinks.right.href
-        );
-        return [left, right];
-      }
+      let left = this.currentSpreadLinks.left
+        ? this.publication.getSpineItem(this.currentSpreadLinks.left.href)
+        : undefined;
+      let right = this.currentSpreadLinks.right
+        ? this.publication.getSpineItem(this.currentSpreadLinks.right.href)
+        : undefined;
+
+      return [left, right];
     }
     let currentLocation = this.currentChapterLink.href;
     return [this.publication.getSpineItem(currentLocation!)];
@@ -3105,7 +3105,12 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.mediaOverlayModule !== undefined &&
           this.hasMediaOverlays
         ) {
-          await this.mediaOverlayModule.initializeResource(this.currentLink());
+          const link = this.currentLink();
+          let index = this.settings.columnCount === 1 ? 0 : link[0] ? 0 : 1;
+          await this.mediaOverlayModule.initializeResource({
+            links: link,
+            index,
+          });
         }
 
         if (
