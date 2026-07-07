@@ -283,6 +283,24 @@ export class MediaOverlayModule implements ReaderModule {
         this.isSegmentMode = true;
         this.settings.playing = true;
 
+        // A two-up spread loads both pages into currentLinks with
+        // currentLinkIndex defaulting to the left page. Re-point it to the page
+        // the navigator is actually on, so per-page media-overlay audio plays on
+        // the correct page instead of greedily re-matching the spread's first
+        // page (which caused fixed-layout books to "read the same page twice").
+        if (this.currentLinks.length > 1) {
+          const currentHref = this.navigator.currentChapterLink?.href;
+          if (currentHref) {
+            const matchIndex = this.currentLinks.findIndex((l) => {
+              const href = l?.HrefDecoded || l?.Href;
+              return href ? currentHref.indexOf(href) !== -1 : false;
+            });
+            if (matchIndex >= 0) {
+              this.currentLinkIndex = matchIndex;
+            }
+          }
+        }
+
         if (
           this.audioElement &&
           this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay
