@@ -816,7 +816,9 @@ export class MediaOverlayModule implements ReaderModule {
         log.log("mediaOverlaysNext() - navLeftOrRight()");
         this.mediaOverlaysStop();
 
-        void this.advanceAfterMediaOverlayOrStop();
+        void this.advanceAfterMediaOverlayOrStop().catch((e) =>
+          console.error(e)
+        );
       } else {
         let switchDoc = false;
         if (this.mediaOverlayTextAudioPair.Text && nextTextAudioPair.Text) {
@@ -853,7 +855,9 @@ export class MediaOverlayModule implements ReaderModule {
       log.log("mediaOverlaysNext() - navLeftOrRight() 2");
       this.mediaOverlaysStop();
 
-      void this.advanceAfterMediaOverlayOrStop();
+      void this.advanceAfterMediaOverlayOrStop().catch((e) =>
+        console.error(e)
+      );
     }
   }
   mediaOverlaysStop() {
