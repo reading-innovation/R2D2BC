@@ -160,6 +160,81 @@ export class MediaOverlayModule implements ReaderModule {
     await this.playLink();
   }
 
+
+  private getLinkHref(link?: Link): string | undefined {
+    return link?.HrefDecoded || link?.Href || undefined;
+  }
+
+  /** Safer than indexOf(substring): avoids "1.xhtml" matching inside "11.xhtml". */
+  private hrefMatchesChapter(
+    linkHref: string | undefined,
+    chapterHref: string | undefined
+  ): boolean {
+    if (!linkHref || !chapterHref) return false;
+    if (chapterHref === linkHref) return true;
+    try {
+      const chapterPath = new URL(chapterHref, "https://dita.digital/").pathname;
+      const linkPath = new URL(linkHref, "https://dita.digital/").pathname;
+      return (
+        chapterPath === linkPath ||
+        chapterPath.endsWith("/" + linkPath.replace(/^\//, "")) ||
+        chapterPath.endsWith(linkPath)
+      );
+    } catch {
+      return (
+        chapterHref.endsWith(linkHref) ||
+        chapterHref.endsWith("/" + linkHref.replace(/^\//, ""))
+      );
+    }
+  }
+
+  private syncCurrentLinkIndexToChapter(): void {
+    if (this.currentLinks.length <= 1) return;
+    const currentHref = this.navigator.currentChapterLink?.href;
+    if (!currentHref) return;
+    const matchIndex = this.currentLinks.findIndex((l) =>
+      this.hrefMatchesChapter(this.getLinkHref(l), currentHref)
+    );
+    if (matchIndex >= 0) {
+      this.currentLinkIndex = matchIndex;
+    }
+  }
+
+  /** Next spread page with a media overlay, scanning forward then wrapping. */
+  private findNextMediaOverlayLinkIndex(
+    fromIndex: number = this.currentLinkIndex
+  ): number {
+    const n = this.currentLinks.length;
+    if (n <= 1) return -1;
+    for (let step = 1; step < n; step++) {
+      const i = (fromIndex + step) % n;
+      if (this.currentLinks[i]?.Properties?.MediaOverlay) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private async playNextMediaOverlayLinkOrAdvance(): Promise<void> {
+    const next = this.findNextMediaOverlayLinkIndex(this.currentLinkIndex);
+    if (next >= 0) {
+      this.currentLinkIndex = next;
+      await this.playLink();
+      return;
+    }
+    if (this.audioElement) {
+      await this.audioElement.pause();
+    }
+    if (this.settings.autoTurn && this.settings.playing) {
+      if (this.audioElement) {
+        await this.audioElement.pause();
+      }
+      this.navigator.nextResource();
+    } else {
+      await this.stopReadAloud();
+    }
+  }
+
   private async playLink() {
     let link = this.currentLinks[this.currentLinkIndex];
     if (link?.Properties?.MediaOverlay) {
@@ -209,19 +284,7 @@ export class MediaOverlayModule implements ReaderModule {
       if (this.audioElement) {
         await this.audioElement.pause();
       }
-      if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-        this.currentLinkIndex++;
-        await this.playLink();
-      } else {
-        if (this.settings.autoTurn && this.settings.playing) {
-          if (this.audioElement) {
-            await this.audioElement.pause();
-          }
-          this.navigator.nextResource();
-        } else {
-          await this.stopReadAloud();
-        }
-      }
+      await this.playNextMediaOverlayLinkOrAdvance();
     }
   }
 
@@ -231,6 +294,7 @@ export class MediaOverlayModule implements ReaderModule {
       this.mediaOverlayNodesForSegment = [];
 
       this.settings.playing = true;
+      this.syncCurrentLinkIndexToChapter();
       if (
         this.audioElement &&
         this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay
@@ -244,16 +308,7 @@ export class MediaOverlayModule implements ReaderModule {
         this.audioElement.volume = this.settings.volume;
         this.audioElement.playbackRate = this.settings.rate;
       } else {
-        if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-          this.currentLinkIndex++;
-          await this.playLink();
-        } else {
-          if (this.settings.autoTurn && this.settings.playing) {
-            this.navigator.nextResource();
-          } else {
-            await this.stopReadAloud();
-          }
-        }
+        await this.playNextMediaOverlayLinkOrAdvance();
       }
       if (this.play) this.play.style.display = "none";
       if (this.pause) this.pause.style.removeProperty("display");
@@ -286,18 +341,7 @@ export class MediaOverlayModule implements ReaderModule {
         // Prefer the navigator's current page within a two-up spread so we don't
         // greedily re-match the left page (which caused "read the same page twice"
         // when every page's audio shares the same time offsets).
-        if (this.currentLinks.length > 1) {
-          const currentHref = this.navigator.currentChapterLink?.href;
-          if (currentHref) {
-            const matchIndex = this.currentLinks.findIndex((l) => {
-              const href = l?.HrefDecoded || l?.Href;
-              return href ? currentHref.indexOf(href) !== -1 : false;
-            });
-            if (matchIndex >= 0) {
-              this.currentLinkIndex = matchIndex;
-            }
-          }
-        }
+        this.syncCurrentLinkIndexToChapter();
 
         if (!this.audioElement) {
           this.isSegmentMode = false;
@@ -359,12 +403,19 @@ export class MediaOverlayModule implements ReaderModule {
                 targetTime: endTime,
               });
 
+            const preferredIndex = candidateOrder[0];
             const hasOtherMoCandidate = candidateOrder.some(
               (i) =>
                 i !== index &&
                 !!this.currentLinks[i]?.Properties?.MediaOverlay
             );
-            if (!timeMatches && hasOtherMoCandidate) {
+            // Soft time mismatch on the preferred page: still play it (float
+            // error / shared offsets). Only abandon non-preferred candidates.
+            if (
+              !timeMatches &&
+              hasOtherMoCandidate &&
+              index !== preferredIndex
+            ) {
               continue;
             }
 
@@ -736,18 +787,7 @@ export class MediaOverlayModule implements ReaderModule {
         log.log("mediaOverlaysNext() - navLeftOrRight()");
         this.mediaOverlaysStop();
 
-        if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-          this.currentLinkIndex++;
-          this.playLink();
-        } else {
-          this.audioElement.pause();
-          if (this.settings.autoTurn && this.settings.playing) {
-            this.audioElement.pause();
-            this.navigator.nextResource();
-          } else {
-            this.stopReadAloud();
-          }
-        }
+        void this.playNextMediaOverlayLinkOrAdvance();
       } else {
         let switchDoc = false;
         if (this.mediaOverlayTextAudioPair.Text && nextTextAudioPair.Text) {
@@ -784,18 +824,7 @@ export class MediaOverlayModule implements ReaderModule {
       log.log("mediaOverlaysNext() - navLeftOrRight() 2");
       this.mediaOverlaysStop();
 
-      if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-        this.currentLinkIndex++;
-        this.playLink();
-      } else {
-        this.audioElement.pause();
-        if (this.settings.autoTurn && this.settings.playing) {
-          this.audioElement.pause();
-          this.navigator.nextResource();
-        } else {
-          this.stopReadAloud();
-        }
-      }
+      void this.playNextMediaOverlayLinkOrAdvance();
     }
   }
   mediaOverlaysStop() {
@@ -1057,17 +1086,7 @@ export class MediaOverlayModule implements ReaderModule {
 
       const onended = async (_ev: Event) => {
         log.log("onended");
-        if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-          this.currentLinkIndex++;
-          await this.playLink();
-        } else {
-          if (this.settings.autoTurn && this.settings.playing) {
-            this.audioElement.pause();
-            this.navigator.nextResource();
-          } else {
-            this.stopReadAloud();
-          }
-        }
+        await this.playNextMediaOverlayLinkOrAdvance();
       };
       this.audioElement.addEventListener("ended", onended);
 
