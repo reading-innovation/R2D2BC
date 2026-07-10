@@ -165,7 +165,13 @@ export class MediaOverlayModule implements ReaderModule {
     return link?.HrefDecoded || link?.Href || undefined;
   }
 
-  /** Safer than indexOf(substring): avoids "1.xhtml" matching inside "11.xhtml". */
+  private pathBasename(path: string): string {
+    const cleaned = path.replace(/\\/g, "/").replace(/\/$/, "");
+    const parts = cleaned.split("/");
+    return parts[parts.length - 1] || cleaned;
+  }
+
+  /** Match chapter URL to a spine/link href without substring false positives. */
   private hrefMatchesChapter(
     linkHref: string | undefined,
     chapterHref: string | undefined
@@ -175,16 +181,13 @@ export class MediaOverlayModule implements ReaderModule {
     try {
       const chapterPath = new URL(chapterHref, "https://dita.digital/").pathname;
       const linkPath = new URL(linkHref, "https://dita.digital/").pathname;
-      return (
-        chapterPath === linkPath ||
-        chapterPath.endsWith("/" + linkPath.replace(/^\//, "")) ||
-        chapterPath.endsWith(linkPath)
-      );
+      if (chapterPath === linkPath) return true;
+      // Require a path-segment boundary ("/1.xhtml" not "11.xhtml").
+      if (chapterPath.endsWith("/" + linkPath.replace(/^\//, ""))) return true;
+      return this.pathBasename(chapterPath) === this.pathBasename(linkPath);
     } catch {
-      return (
-        chapterHref.endsWith(linkHref) ||
-        chapterHref.endsWith("/" + linkHref.replace(/^\//, ""))
-      );
+      if (chapterHref.endsWith("/" + linkHref.replace(/^\//, ""))) return true;
+      return this.pathBasename(chapterHref) === this.pathBasename(linkHref);
     }
   }
 
@@ -200,8 +203,20 @@ export class MediaOverlayModule implements ReaderModule {
     }
   }
 
-  /** Next spread page with a media overlay, scanning forward then wrapping. */
-  private findNextMediaOverlayLinkIndex(
+  /** Forward-only: next higher index with MO (no wrap — avoids replaying the page we just finished). */
+  private findForwardMediaOverlayLinkIndex(
+    fromIndex: number = this.currentLinkIndex
+  ): number {
+    for (let i = fromIndex + 1; i < this.currentLinks.length; i++) {
+      if (this.currentLinks[i]?.Properties?.MediaOverlay) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** Any other spread page with MO (including earlier indices). For "current has no audio". */
+  private findOtherMediaOverlayLinkIndex(
     fromIndex: number = this.currentLinkIndex
   ): number {
     const n = this.currentLinks.length;
@@ -215,8 +230,8 @@ export class MediaOverlayModule implements ReaderModule {
     return -1;
   }
 
-  private async playNextMediaOverlayLinkOrAdvance(): Promise<void> {
-    const next = this.findNextMediaOverlayLinkIndex(this.currentLinkIndex);
+  private async advanceAfterMediaOverlayOrStop(): Promise<void> {
+    const next = this.findForwardMediaOverlayLinkIndex(this.currentLinkIndex);
     if (next >= 0) {
       this.currentLinkIndex = next;
       await this.playLink();
@@ -226,9 +241,23 @@ export class MediaOverlayModule implements ReaderModule {
       await this.audioElement.pause();
     }
     if (this.settings.autoTurn && this.settings.playing) {
-      if (this.audioElement) {
-        await this.audioElement.pause();
-      }
+      this.navigator.nextResource();
+    } else {
+      await this.stopReadAloud();
+    }
+  }
+
+  private async playOtherMediaOverlayLinkOrAdvance(): Promise<void> {
+    const next = this.findOtherMediaOverlayLinkIndex(this.currentLinkIndex);
+    if (next >= 0) {
+      this.currentLinkIndex = next;
+      await this.playLink();
+      return;
+    }
+    if (this.audioElement) {
+      await this.audioElement.pause();
+    }
+    if (this.settings.autoTurn && this.settings.playing) {
       this.navigator.nextResource();
     } else {
       await this.stopReadAloud();
@@ -284,7 +313,7 @@ export class MediaOverlayModule implements ReaderModule {
       if (this.audioElement) {
         await this.audioElement.pause();
       }
-      await this.playNextMediaOverlayLinkOrAdvance();
+      await this.playOtherMediaOverlayLinkOrAdvance();
     }
   }
 
@@ -308,7 +337,7 @@ export class MediaOverlayModule implements ReaderModule {
         this.audioElement.volume = this.settings.volume;
         this.audioElement.playbackRate = this.settings.rate;
       } else {
-        await this.playNextMediaOverlayLinkOrAdvance();
+        await this.playOtherMediaOverlayLinkOrAdvance();
       }
       if (this.play) this.play.style.display = "none";
       if (this.pause) this.pause.style.removeProperty("display");
@@ -787,7 +816,7 @@ export class MediaOverlayModule implements ReaderModule {
         log.log("mediaOverlaysNext() - navLeftOrRight()");
         this.mediaOverlaysStop();
 
-        void this.playNextMediaOverlayLinkOrAdvance();
+        void this.advanceAfterMediaOverlayOrStop();
       } else {
         let switchDoc = false;
         if (this.mediaOverlayTextAudioPair.Text && nextTextAudioPair.Text) {
@@ -824,7 +853,7 @@ export class MediaOverlayModule implements ReaderModule {
       log.log("mediaOverlaysNext() - navLeftOrRight() 2");
       this.mediaOverlaysStop();
 
-      void this.playNextMediaOverlayLinkOrAdvance();
+      void this.advanceAfterMediaOverlayOrStop();
     }
   }
   mediaOverlaysStop() {
@@ -1086,7 +1115,7 @@ export class MediaOverlayModule implements ReaderModule {
 
       const onended = async (_ev: Event) => {
         log.log("onended");
-        await this.playNextMediaOverlayLinkOrAdvance();
+        await this.advanceAfterMediaOverlayOrStop();
       };
       this.audioElement.addEventListener("ended", onended);
 
