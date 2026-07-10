@@ -251,6 +251,9 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
 
   currentChapterLink: D2Link = { href: "" };
   currentSpreadLinks: { left?: D2Link; right?: D2Link } = {};
+  // Bumped per spread render so a stale async iframe write (e.g. the cover
+  // resolving late onto page 2) is dropped instead of clobbering the spread.
+  private spreadRenderGeneration = 0;
   currentTOCRawLink: string;
   private nextChapterLink: D2Link | undefined;
   private previousChapterLink: D2Link | undefined;
@@ -1736,7 +1739,11 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
 
     this.currentSpreadLinks = {};
 
+    // Newer render wins: the writes below bail once this token is superseded.
+    const renderGeneration = ++this.spreadRenderGeneration;
+
     function writeIframeDoc(content: string, href: string) {
+      if (renderGeneration !== self.spreadRenderGeneration) return;
       const parser = new DOMParser();
       const doc = parser.parseFromString(content, "application/xhtml+xml");
       if (doc.head) {
@@ -1758,6 +1765,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
     }
 
     function writeIframe2Doc(content: string, href: string) {
+      if (renderGeneration !== self.spreadRenderGeneration) return;
       const parser = new DOMParser();
       const doc = parser.parseFromString(content, "application/xhtml+xml");
       if (doc.head) {
