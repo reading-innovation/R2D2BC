@@ -283,11 +283,9 @@ export class MediaOverlayModule implements ReaderModule {
         this.isSegmentMode = true;
         this.settings.playing = true;
 
-        // A two-up spread loads both pages into currentLinks with
-        // currentLinkIndex defaulting to the left page. Re-point it to the page
-        // the navigator is actually on, so per-page media-overlay audio plays on
-        // the correct page instead of greedily re-matching the spread's first
-        // page (which caused fixed-layout books to "read the same page twice").
+        // Prefer the navigator's current page within a two-up spread so we don't
+        // greedily re-match the left page (which caused "read the same page twice"
+        // when every page's audio shares the same time offsets).
         if (this.currentLinks.length > 1) {
           const currentHref = this.navigator.currentChapterLink?.href;
           if (currentHref) {
@@ -301,80 +299,99 @@ export class MediaOverlayModule implements ReaderModule {
           }
         }
 
-        if (
-          this.audioElement &&
-          this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay
-        ) {
-          this.currentAudioBegin = startTime;
-          this.currentAudioEnd = endTime;
-
-          this.mediaOverlayNodesForSegment = [];
-          await this.setMediaOverlayTextAudioPairForTimeRange(
-            startTime,
-            endTime
-          );
-
-          if (this.mediaOverlayNodesForSegment.length === 0) {
-            if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-              this.currentLinkIndex++;
-              this.startReadAloudBySegment({ startTime, endTime });
-              return;
-            } else {
-              console.error(
-                "No matching node found for time range",
-                startTime,
-                endTime
-              );
-
-              this.isSegmentMode = false;
-              this.settings.playing = false;
-            }
-            return;
-          }
-
-          this.mediaOverlayNodesForSegment.sort((a, b) => {
-            const aStartTime = this.getAudioTimeRangeFromNode(a)?.[0];
-            const bStartTime = this.getAudioTimeRangeFromNode(b)?.[0];
-            return Number(aStartTime) - Number(bStartTime);
-          });
-
-          const firstNodeTimeRange = this.getAudioTimeRangeFromNode(
-            this.mediaOverlayNodesForSegment[0]
-          );
-          const lastNodeTimeRange = this.getAudioTimeRangeFromNode(
-            this.mediaOverlayNodesForSegment[
-              this.mediaOverlayNodesForSegment.length - 1
-            ]
-          );
-
-          if (
-            !checkIsTimeInRange({
-              currentTime: firstNodeTimeRange?.[0] || 0,
-              targetTime: startTime,
-            }) ||
-            !checkIsTimeInRange({
-              currentTime: lastNodeTimeRange?.[1] || 0,
-              targetTime: endTime,
-            })
-          ) {
-            if (this.currentLinks.length > 1 && this.currentLinkIndex === 0) {
-              this.currentLinkIndex++;
-              this.mediaOverlayNodesForSegment = [];
-              this.startReadAloudBySegment({ startTime, endTime });
-              return;
+        if (!this.audioElement) {
+          this.isSegmentMode = false;
+          this.settings.playing = false;
+        } else {
+          // Try current page first, then any other spread page that has a media
+          // overlay. Illustration-only pages have no MO — without this fallback,
+          // play becomes a silent no-op when currentChapterLink is the image side.
+          const candidateOrder: number[] = [this.currentLinkIndex];
+          for (let i = 0; i < this.currentLinks.length; i++) {
+            if (i !== this.currentLinkIndex) {
+              candidateOrder.push(i);
             }
           }
 
-          this.mediaOverlayTextAudioPair = this.mediaOverlayNodesForSegment[0];
+          let played = false;
+          for (const index of candidateOrder) {
+            const link = this.currentLinks[index];
+            if (!link?.Properties?.MediaOverlay) {
+              continue;
+            }
 
-          await this.playMediaOverlaysAudio(
-            this.mediaOverlayTextAudioPair,
-            firstNodeTimeRange?.[0],
-            firstNodeTimeRange?.[1]
-          );
+            this.currentLinkIndex = index;
+            this.currentAudioBegin = startTime;
+            this.currentAudioEnd = endTime;
+            this.mediaOverlayNodesForSegment = [];
 
-          this.audioElement.volume = this.settings.volume;
-          this.audioElement.playbackRate = this.settings.rate;
+            await this.setMediaOverlayTextAudioPairForTimeRange(
+              startTime,
+              endTime
+            );
+
+            if (this.mediaOverlayNodesForSegment.length === 0) {
+              continue;
+            }
+
+            this.mediaOverlayNodesForSegment.sort((a, b) => {
+              const aStartTime = this.getAudioTimeRangeFromNode(a)?.[0];
+              const bStartTime = this.getAudioTimeRangeFromNode(b)?.[0];
+              return Number(aStartTime) - Number(bStartTime);
+            });
+
+            const firstNodeTimeRange = this.getAudioTimeRangeFromNode(
+              this.mediaOverlayNodesForSegment[0]
+            );
+            const lastNodeTimeRange = this.getAudioTimeRangeFromNode(
+              this.mediaOverlayNodesForSegment[
+                this.mediaOverlayNodesForSegment.length - 1
+              ]
+            );
+
+            const timeMatches =
+              checkIsTimeInRange({
+                currentTime: firstNodeTimeRange?.[0] || 0,
+                targetTime: startTime,
+              }) &&
+              checkIsTimeInRange({
+                currentTime: lastNodeTimeRange?.[1] || 0,
+                targetTime: endTime,
+              });
+
+            const hasOtherMoCandidate = candidateOrder.some(
+              (i) =>
+                i !== index &&
+                !!this.currentLinks[i]?.Properties?.MediaOverlay
+            );
+            if (!timeMatches && hasOtherMoCandidate) {
+              continue;
+            }
+
+            this.mediaOverlayTextAudioPair =
+              this.mediaOverlayNodesForSegment[0];
+
+            await this.playMediaOverlaysAudio(
+              this.mediaOverlayTextAudioPair,
+              firstNodeTimeRange?.[0],
+              firstNodeTimeRange?.[1]
+            );
+
+            this.audioElement.volume = this.settings.volume;
+            this.audioElement.playbackRate = this.settings.rate;
+            played = true;
+            break;
+          }
+
+          if (!played) {
+            console.error(
+              "No matching node found for time range",
+              startTime,
+              endTime
+            );
+            this.isSegmentMode = false;
+            this.settings.playing = false;
+          }
         }
       }
 
