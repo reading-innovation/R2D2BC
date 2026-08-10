@@ -32,9 +32,11 @@ interface Navigator {
   startReadAloudBySegment?({
     startTime,
     endTime,
+    audioFile,
   }: {
     startTime: number;
     endTime: number;
+    audioFile?: string;
   }): void;
 
   stopReadAloud?(): void;

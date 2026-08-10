@@ -479,12 +479,14 @@ export default class D2Reader {
   startReadAloudBySegment = ({
     startTime,
     endTime,
+    audioFile,
   }: {
     startTime: number;
     endTime: number;
+    audioFile?: string;
   }) => {
     if (this.navigator instanceof IFrameNavigator) {
-      this.navigator.startReadAloudBySegment({ startTime, endTime });
+      this.navigator.startReadAloudBySegment({ startTime, endTime, audioFile });
     }
   };
 

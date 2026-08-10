@@ -347,9 +347,11 @@ export class MediaOverlayModule implements ReaderModule {
   async startReadAloudBySegment({
     startTime,
     endTime,
+    audioFile,
   }: {
     startTime: number;
     endTime: number;
+    audioFile?: string;
   }) {
     if (this.navigator.rights.enableMediaOverlays) {
       if (
@@ -400,7 +402,8 @@ export class MediaOverlayModule implements ReaderModule {
 
             await this.setMediaOverlayTextAudioPairForTimeRange(
               startTime,
-              endTime
+              endTime,
+              audioFile
             );
 
             if (this.mediaOverlayNodesForSegment.length === 0) {
@@ -482,7 +485,8 @@ export class MediaOverlayModule implements ReaderModule {
 
   private async setMediaOverlayTextAudioPairForTimeRange(
     startTime: number,
-    endTime: number
+    endTime: number,
+    audioFile?: string
   ) {
     const link = this.currentLinks[this.currentLinkIndex];
     if (!link?.MediaOverlays) {
@@ -528,8 +532,22 @@ export class MediaOverlayModule implements ReaderModule {
     this.findMediaOverlayNodeByTimeRange(
       link.MediaOverlays,
       startTime,
-      endTime
+      endTime,
+      audioFile
     );
+
+    if (audioFile && this.mediaOverlayNodesForSegment.length === 0) {
+      log.log(
+        "setMediaOverlayTextAudioPairForTimeRange: no node in " +
+          audioFile +
+          ", falling back to time only"
+      );
+      this.findMediaOverlayNodeByTimeRange(
+        link.MediaOverlays,
+        startTime,
+        endTime
+      );
+    }
 
     if (this.mediaOverlayNodesForSegment.length > 0) {
       this.mediaOverlayTextAudioPair = this.mediaOverlayNodesForSegment[0];
@@ -550,11 +568,12 @@ export class MediaOverlayModule implements ReaderModule {
   private findMediaOverlayNodeByTimeRange(
     mo: MediaOverlayNode,
     startTime: number,
-    endTime: number
+    endTime: number,
+    audioFile?: string
   ): MediaOverlayNode | undefined {
     if (mo.Audio) {
       const nodeTimeRange = this.getAudioTimeRangeFromNode(mo);
-      if (nodeTimeRange) {
+      if (nodeTimeRange && this.isNodeInAudioFile(mo, audioFile)) {
         const [nodeStart, nodeEnd] = nodeTimeRange;
         if (
           this.isNodeIncludedInSegment({
@@ -578,7 +597,8 @@ export class MediaOverlayModule implements ReaderModule {
         const match = this.findMediaOverlayNodeByTimeRange(
           child,
           startTime,
-          endTime
+          endTime,
+          audioFile
         );
         if (match) {
           if (
@@ -593,6 +613,32 @@ export class MediaOverlayModule implements ReaderModule {
     }
 
     return undefined;
+  }
+
+  private getAudioFileFromNode(mo: MediaOverlayNode): string | undefined {
+    if (!mo.Audio) {
+      return undefined;
+    }
+
+    const urlObjFull = new URL(mo.Audio, this.publication.manifestUrl);
+    const name = urlObjFull.pathname.split("/").pop();
+
+    return name ? decodeURIComponent(name) : undefined;
+  }
+
+  private isNodeInAudioFile(mo: MediaOverlayNode, audioFile?: string): boolean {
+    if (!audioFile) {
+      return true;
+    }
+
+    const nodeFile = this.getAudioFileFromNode(mo);
+    if (!nodeFile) {
+      return true;
+    }
+
+    const wanted = decodeURIComponent(audioFile).split("/").pop();
+
+    return wanted !== undefined && nodeFile === wanted;
   }
 
   private getAudioTimeRangeFromNode(
