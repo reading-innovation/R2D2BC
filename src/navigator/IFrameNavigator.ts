@@ -2231,16 +2231,22 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
   startReadAloudBySegment({
     startTime,
     endTime,
+    audioFile,
   }: {
     startTime: number;
     endTime: number;
+    audioFile?: string;
   }) {
     if (
       this.rights.enableMediaOverlays &&
       this.mediaOverlayModule?.startReadAloudBySegment !== undefined &&
       this.hasMediaOverlays
     ) {
-      this.mediaOverlayModule.startReadAloudBySegment({ startTime, endTime });
+      this.mediaOverlayModule.startReadAloudBySegment({
+        startTime,
+        endTime,
+        audioFile,
+      });
     }
   }
   startReadAlong() {
