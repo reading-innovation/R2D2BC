@@ -323,11 +323,22 @@ export class MediaOverlayModule implements ReaderModule {
       this.mediaOverlayNodesForSegment = [];
 
       this.settings.playing = true;
-      this.syncCurrentLinkIndexToChapter();
-      if (
-        this.audioElement &&
-        this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay
+
+      // Deliberately no syncCurrentLinkIndexToChapter() here: currentLinkIndex
+      // already points at the spread page whose overlay and audio are loaded, and
+      // the highlight follows it. Re-anchoring to currentChapterLink would move
+      // the highlight to the other page while the loaded clip keeps playing.
+      if (!this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay) {
+        await this.playOtherMediaOverlayLinkOrAdvance();
+      } else if (
+        !this.audioElement ||
+        !this.mediaOverlayTextAudioPair ||
+        !this.mediaOverlayRoot
       ) {
+        // Nothing resolved yet (or mediaOverlaysStop() cleared it), so re-resolve
+        // instead of replaying whatever the audio element happens to hold.
+        await this.playLink();
+      } else {
         const timeToSeekTo = this.currentAudioBegin
           ? this.currentAudioBegin
           : 0;
@@ -336,8 +347,6 @@ export class MediaOverlayModule implements ReaderModule {
         this.ensureOnTimeUpdate(false, true);
         this.audioElement.volume = this.settings.volume;
         this.audioElement.playbackRate = this.settings.rate;
-      } else {
-        await this.playOtherMediaOverlayLinkOrAdvance();
       }
       if (this.play) this.play.style.display = "none";
       if (this.pause) this.pause.style.removeProperty("display");

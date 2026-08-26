@@ -1593,10 +1593,9 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.hasMediaOverlays
         ) {
           let link = this.currentLink();
-          let index = this.settings.columnCount === 1 || link[0] ? 0 : 1;
           await this.mediaOverlayModule?.initializeResource({
             links: link,
-            index,
+            index: this.currentSpreadIndex(),
           });
         }
         await this.updatePositionInfo();
@@ -2316,6 +2315,17 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
   currentResource(): number | undefined {
     let currentLocation = this.currentChapterLink.href;
     return this.publication.getSpineIndex(currentLocation);
+  }
+  /**
+   * Where a read-along should begin inside the current spread: its first page,
+   * so a two-up spread is narrated left to right. `currentChapterLink` is only
+   * an anchor and may point at the right page, which is not where reading starts.
+   */
+  currentSpreadIndex(): number {
+    if (this.settings.columnCount === 1) {
+      return 0;
+    }
+    return this.currentSpreadLinks.left ? 0 : 1;
   }
   currentLink(): Array<Link | undefined> {
     if (this.settings.columnCount !== 1) {
@@ -3120,10 +3130,9 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.hasMediaOverlays
         ) {
           const link = this.currentLink();
-          let index = this.settings.columnCount === 1 ? 0 : link[0] ? 0 : 1;
           await this.mediaOverlayModule.initializeResource({
             links: link,
-            index,
+            index: this.currentSpreadIndex(),
           });
         }
 
