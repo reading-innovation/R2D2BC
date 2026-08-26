@@ -160,7 +160,6 @@ export class MediaOverlayModule implements ReaderModule {
     await this.playLink();
   }
 
-
   private getLinkHref(link?: Link): string | undefined {
     return link?.HrefDecoded || link?.Href || undefined;
   }
@@ -179,7 +178,8 @@ export class MediaOverlayModule implements ReaderModule {
     if (!linkHref || !chapterHref) return false;
     if (chapterHref === linkHref) return true;
     try {
-      const chapterPath = new URL(chapterHref, "https://dita.digital/").pathname;
+      const chapterPath = new URL(chapterHref, "https://dita.digital/")
+        .pathname;
       const linkPath = new URL(linkHref, "https://dita.digital/").pathname;
       if (chapterPath === linkPath) return true;
       // Require a path-segment boundary ("/1.xhtml" not "11.xhtml").
@@ -447,8 +447,7 @@ export class MediaOverlayModule implements ReaderModule {
             const preferredIndex = candidateOrder[0];
             const hasOtherMoCandidate = candidateOrder.some(
               (i) =>
-                i !== index &&
-                !!this.currentLinks[i]?.Properties?.MediaOverlay
+                i !== index && !!this.currentLinks[i]?.Properties?.MediaOverlay
             );
             // Soft time mismatch on the preferred page: still play it (float
             // error / shared offsets). Only abandon non-preferred candidates.
@@ -910,9 +909,7 @@ export class MediaOverlayModule implements ReaderModule {
       log.log("mediaOverlaysNext() - navLeftOrRight() 2");
       this.mediaOverlaysStop();
 
-      void this.advanceAfterMediaOverlayOrStop().catch((e) =>
-        console.error(e)
-      );
+      void this.advanceAfterMediaOverlayOrStop().catch((e) => console.error(e));
     }
   }
   mediaOverlaysStop() {
