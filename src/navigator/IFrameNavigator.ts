@@ -2392,6 +2392,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
     log.log(linkHref);
     position.href = linkHref;
     this.stopReadAloud();
+    this.mediaOverlayModule?.cancelAutoTurn();
     this.navigate(position);
   }
   currentLocator(): Locator {
@@ -2472,6 +2473,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
     event: MouseEvent | TouchEvent | KeyboardEvent | undefined
   ): void {
     this.stopReadAloud();
+    this.mediaOverlayModule?.cancelAutoTurn();
     if (this.view?.layout === "fixed") {
       this.handlePreviousChapterClick(event);
     } else {
@@ -2518,6 +2520,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
       !this.publication.positions
     ) {
       this.stopReadAloud();
+      this.mediaOverlayModule?.cancelAutoTurn();
       if (this.view?.layout === "fixed") {
         this.handleNextChapterClick(event);
       } else {
