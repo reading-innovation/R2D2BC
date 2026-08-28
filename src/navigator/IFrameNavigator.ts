@@ -1593,10 +1593,9 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.hasMediaOverlays
         ) {
           let link = this.currentLink();
-          let index = this.settings.columnCount === 1 || link[0] ? 0 : 1;
           await this.mediaOverlayModule?.initializeResource({
             links: link,
-            index,
+            index: this.currentSpreadIndex(),
           });
         }
         await this.updatePositionInfo();
@@ -2317,6 +2316,17 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
     let currentLocation = this.currentChapterLink.href;
     return this.publication.getSpineIndex(currentLocation);
   }
+  /**
+   * Where a read-along should begin inside the current spread: its first page,
+   * so a two-up spread is narrated left to right. `currentChapterLink` is only
+   * an anchor and may point at the right page, which is not where reading starts.
+   */
+  currentSpreadIndex(): number {
+    if (this.settings.columnCount === 1) {
+      return 0;
+    }
+    return this.currentSpreadLinks.left ? 0 : 1;
+  }
   currentLink(): Array<Link | undefined> {
     if (this.settings.columnCount !== 1) {
       let left = this.currentSpreadLinks.left
@@ -2382,6 +2392,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
     log.log(linkHref);
     position.href = linkHref;
     this.stopReadAloud();
+    this.mediaOverlayModule?.cancelAutoTurn();
     this.navigate(position);
   }
   currentLocator(): Locator {
@@ -2462,6 +2473,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
     event: MouseEvent | TouchEvent | KeyboardEvent | undefined
   ): void {
     this.stopReadAloud();
+    this.mediaOverlayModule?.cancelAutoTurn();
     if (this.view?.layout === "fixed") {
       this.handlePreviousChapterClick(event);
     } else {
@@ -2508,6 +2520,7 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
       !this.publication.positions
     ) {
       this.stopReadAloud();
+      this.mediaOverlayModule?.cancelAutoTurn();
       if (this.view?.layout === "fixed") {
         this.handleNextChapterClick(event);
       } else {
@@ -3120,10 +3133,9 @@ export class IFrameNavigator extends EventEmitter implements Navigator {
           this.hasMediaOverlays
         ) {
           const link = this.currentLink();
-          let index = this.settings.columnCount === 1 ? 0 : link[0] ? 0 : 1;
           await this.mediaOverlayModule.initializeResource({
             links: link,
-            index,
+            index: this.currentSpreadIndex(),
           });
         }
 

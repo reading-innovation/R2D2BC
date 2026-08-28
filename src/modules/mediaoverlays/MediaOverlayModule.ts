@@ -102,6 +102,12 @@ export class MediaOverlayModule implements ReaderModule {
 
   private mediaOverlayNodesForSegment: MediaOverlayNode[] = [];
   private isSegmentMode: boolean = false;
+  /**
+   * True only while playback itself is walking forward looking for the next
+   * page with audio. User page turns must not be mistaken for that walk,
+   * otherwise turning back onto a silent page bounces the reader forward again.
+   */
+  private isAutoTurning = false;
   api?: MediaOverlayModuleAPI;
 
   public static create(config: MediaOverlayModuleConfig) {
@@ -160,7 +166,6 @@ export class MediaOverlayModule implements ReaderModule {
     await this.playLink();
   }
 
-
   private getLinkHref(link?: Link): string | undefined {
     return link?.HrefDecoded || link?.Href || undefined;
   }
@@ -179,7 +184,8 @@ export class MediaOverlayModule implements ReaderModule {
     if (!linkHref || !chapterHref) return false;
     if (chapterHref === linkHref) return true;
     try {
-      const chapterPath = new URL(chapterHref, "https://dita.digital/").pathname;
+      const chapterPath = new URL(chapterHref, "https://dita.digital/")
+        .pathname;
       const linkPath = new URL(linkHref, "https://dita.digital/").pathname;
       if (chapterPath === linkPath) return true;
       // Require a path-segment boundary ("/1.xhtml" not "11.xhtml").
@@ -230,6 +236,14 @@ export class MediaOverlayModule implements ReaderModule {
     return -1;
   }
 
+  /** False on the last resource, so an auto-turn walk always terminates. */
+  private hasNextResource(): boolean {
+    const total = this.navigator.totalResources();
+    const current = this.navigator.currentResource();
+    if (current === undefined || total <= 0) return false;
+    return current < total - 1;
+  }
+
   private async advanceAfterMediaOverlayOrStop(): Promise<void> {
     const next = this.findForwardMediaOverlayLinkIndex(this.currentLinkIndex);
     if (next >= 0) {
@@ -240,7 +254,14 @@ export class MediaOverlayModule implements ReaderModule {
     if (this.audioElement) {
       await this.audioElement.pause();
     }
-    if (this.settings.autoTurn && this.settings.playing) {
+    // Playback ran off the end of the spread by itself, so this is a real
+    // auto-turn and the walk may continue past pages that have no audio.
+    if (
+      this.settings.autoTurn &&
+      this.settings.playing &&
+      this.hasNextResource()
+    ) {
+      this.isAutoTurning = true;
       this.navigator.nextResource();
     } else {
       await this.stopReadAloud();
@@ -257,16 +278,40 @@ export class MediaOverlayModule implements ReaderModule {
     if (this.audioElement) {
       await this.audioElement.pause();
     }
-    if (this.settings.autoTurn && this.settings.playing) {
+    if (
+      this.isAutoTurning &&
+      this.settings.autoTurn &&
+      this.settings.playing &&
+      this.hasNextResource()
+    ) {
       this.navigator.nextResource();
-    } else {
+      return;
+    }
+    // Silent spread that the user navigated to. Stay put, but keep `playing`
+    // set so the next spread that does have audio resumes on its own.
+    this.isAutoTurning = false;
+    if (!this.settings.playing) {
       await this.stopReadAloud();
+    }
+  }
+
+  /**
+   * Invalidates an in-flight auto-turn when the user turns the page themselves.
+   * The clip still running belongs to the page being left, and its end handler
+   * would otherwise auto-turn forward and undo the navigation.
+   */
+  cancelAutoTurn() {
+    this.isAutoTurning = false;
+    this.ensureOnTimeUpdate(true, false);
+    if (this.audioElement) {
+      this.audioElement.pause();
     }
   }
 
   private async playLink() {
     let link = this.currentLinks[this.currentLinkIndex];
     if (link?.Properties?.MediaOverlay) {
+      this.isAutoTurning = false;
       this.ensureOnTimeUpdate(false, false);
       const moUrl = link.Properties?.MediaOverlay;
 
@@ -323,11 +368,25 @@ export class MediaOverlayModule implements ReaderModule {
       this.mediaOverlayNodesForSegment = [];
 
       this.settings.playing = true;
-      this.syncCurrentLinkIndexToChapter();
-      if (
-        this.audioElement &&
-        this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay
+
+      // Deliberately no syncCurrentLinkIndexToChapter() here: currentLinkIndex
+      // already points at the spread page whose overlay and audio are loaded, and
+      // the highlight follows it. Re-anchoring to currentChapterLink would move
+      // the highlight to the other page while the loaded clip keeps playing.
+      if (!this.currentLinks[this.currentLinkIndex]?.Properties?.MediaOverlay) {
+        // An explicit play request on a silent page means "read on from here",
+        // so allow the forward walk that a plain page turn is denied.
+        this.isAutoTurning = this.settings.autoTurn;
+        await this.playOtherMediaOverlayLinkOrAdvance();
+      } else if (
+        !this.audioElement ||
+        !this.mediaOverlayTextAudioPair ||
+        !this.mediaOverlayRoot
       ) {
+        // Nothing resolved yet (or mediaOverlaysStop() cleared it), so re-resolve
+        // instead of replaying whatever the audio element happens to hold.
+        await this.playLink();
+      } else {
         const timeToSeekTo = this.currentAudioBegin
           ? this.currentAudioBegin
           : 0;
@@ -336,8 +395,6 @@ export class MediaOverlayModule implements ReaderModule {
         this.ensureOnTimeUpdate(false, true);
         this.audioElement.volume = this.settings.volume;
         this.audioElement.playbackRate = this.settings.rate;
-      } else {
-        await this.playOtherMediaOverlayLinkOrAdvance();
       }
       if (this.play) this.play.style.display = "none";
       if (this.pause) this.pause.style.removeProperty("display");
@@ -438,8 +495,7 @@ export class MediaOverlayModule implements ReaderModule {
             const preferredIndex = candidateOrder[0];
             const hasOtherMoCandidate = candidateOrder.some(
               (i) =>
-                i !== index &&
-                !!this.currentLinks[i]?.Properties?.MediaOverlay
+                i !== index && !!this.currentLinks[i]?.Properties?.MediaOverlay
             );
             // Soft time mismatch on the preferred page: still play it (float
             // error / shared offsets). Only abandon non-preferred candidates.
@@ -679,6 +735,7 @@ export class MediaOverlayModule implements ReaderModule {
   async stopReadAloud() {
     if (this.navigator.rights.enableMediaOverlays) {
       this.settings.playing = false;
+      this.isAutoTurning = false;
 
       if (this.audioElement) this.audioElement.pause();
 
@@ -689,6 +746,7 @@ export class MediaOverlayModule implements ReaderModule {
   pauseReadAloud() {
     if (this.navigator.rights.enableMediaOverlays) {
       this.settings.playing = false;
+      this.isAutoTurning = false;
       this.audioElement.pause();
       if (this.play) this.play.style.removeProperty("display");
       if (this.pause) this.pause.style.display = "none";
@@ -901,9 +959,7 @@ export class MediaOverlayModule implements ReaderModule {
       log.log("mediaOverlaysNext() - navLeftOrRight() 2");
       this.mediaOverlaysStop();
 
-      void this.advanceAfterMediaOverlayOrStop().catch((e) =>
-        console.error(e)
-      );
+      void this.advanceAfterMediaOverlayOrStop().catch((e) => console.error(e));
     }
   }
   mediaOverlaysStop() {
