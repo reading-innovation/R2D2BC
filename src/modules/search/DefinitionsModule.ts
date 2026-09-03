@@ -102,8 +102,8 @@ export class DefinitionsModule implements ReaderModule {
   protected async start(): Promise<void> {
     setTimeout(() => {
       this.properties.hideLayer
-        ? this.navigator.hideLayer("definitions")
-        : this.navigator.showLayer("definitions");
+        ? this.navigator?.hideLayer("definitions")
+        : this.navigator?.showLayer("definitions");
     }, 10);
   }
 

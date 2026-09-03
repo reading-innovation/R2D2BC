@@ -144,8 +144,8 @@ export class AnnotationModule implements ReaderModule {
 
     setTimeout(() => {
       this.properties?.hideLayer
-        ? this.navigator.hideLayer("highlights")
-        : this.navigator.showLayer("highlights");
+        ? this.navigator?.hideLayer("highlights")
+        : this.navigator?.showLayer("highlights");
     }, 10);
   }
   private hide: HTMLLinkElement = HTMLUtilities.findElement(
