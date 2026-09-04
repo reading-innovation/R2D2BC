@@ -134,8 +134,8 @@ export class SearchModule implements ReaderModule {
     }
     setTimeout(() => {
       this.properties.hideLayer
-        ? this.navigator.hideLayer("search")
-        : this.navigator.showLayer("search");
+        ? this.navigator?.hideLayer("search")
+        : this.navigator?.showLayer("search");
     }, 10);
   }
 

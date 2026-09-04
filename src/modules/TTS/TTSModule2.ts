@@ -741,8 +741,8 @@ export class TTSModule2 implements ReaderModule {
     }
     setTimeout(() => {
       this.properties?.hideLayer
-        ? this.navigator.hideLayer("readaloud")
-        : this.navigator.showLayer("readaloud");
+        ? this.navigator?.hideLayer("readaloud")
+        : this.navigator?.showLayer("readaloud");
     }, 10);
   }
 

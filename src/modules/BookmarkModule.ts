@@ -154,8 +154,8 @@ export class BookmarkModule implements ReaderModule {
       await this.showBookmarks();
       setTimeout(() => {
         this.properties.hideLayer
-          ? this.navigator.hideLayer("highlights")
-          : this.navigator.showLayer("highlights");
+          ? this.navigator?.hideLayer("highlights")
+          : this.navigator?.showLayer("highlights");
       }, 10);
     }, 100);
   }

@@ -115,8 +115,8 @@ export class PageBreakModule implements ReaderModule {
     }
     setTimeout(() => {
       this.properties.hideLayer
-        ? this.navigator.hideLayer("pagebreak")
-        : this.navigator.showLayer("pagebreak");
+        ? this.navigator?.hideLayer("pagebreak")
+        : this.navigator?.showLayer("pagebreak");
     }, 10);
   }
   async goToPageNumber(event: any): Promise<any> {
