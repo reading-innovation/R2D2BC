@@ -991,38 +991,45 @@ export class TextHighlighter {
           text = removeTrailingPunctuation(text);
           endOffsetTemp = length - text.trimEnd().length;
 
+          function clampOffset(node: Node, offset: number) {
+            const maxOffset =
+              node.nodeType === 3
+                ? (node as Text).length
+                : node.childNodes.length;
+            return Math.min(Math.max(offset, 0), maxOffset);
+          }
+
+          let anchorOffset = selection.anchorOffset;
+          let focusOffset = selection.focusOffset;
+          if (trimmed) {
+            let selectionRange = document.createRange();
+            selectionRange.setStart(selection.anchorNode, anchorOffset);
+            selectionRange.setEnd(selection.focusNode, focusOffset);
+            let isBackward = selectionRange.collapsed;
+            selectionRange.detach();
+
+            anchorOffset = clampOffset(
+              selection.anchorNode,
+              anchorOffset + (isBackward ? -endOffsetTemp : startOffsetTemp)
+            );
+            focusOffset = clampOffset(
+              selection.focusNode,
+              focusOffset + (isBackward ? startOffsetTemp : -endOffsetTemp)
+            );
+          }
+
           // Detect if selection is backwards
           let range = document.createRange();
-          if (trimmed) {
-            range.setStart(
-              selection.anchorNode,
-              selection.anchorOffset + startOffsetTemp
-            );
-            range.setEnd(
-              selection.focusNode,
-              selection.focusOffset - endOffsetTemp
-            );
-          } else {
-            range.setStart(selection.anchorNode, selection.anchorOffset);
-            range.setEnd(selection.focusNode, selection.focusOffset);
-          }
+          range.setStart(selection.anchorNode, anchorOffset);
+          range.setEnd(selection.focusNode, focusOffset);
 
           let backwards = range.collapsed;
           range.detach();
 
           // modify() works on the focus of the selection
           let endNode = selection.focusNode;
-          let endOffset;
-          if (trimmed) {
-            endOffset = selection.focusOffset - endOffsetTemp;
-            selection.collapse(
-              selection.anchorNode,
-              selection.anchorOffset + startOffsetTemp
-            );
-          } else {
-            endOffset = selection.focusOffset;
-            selection.collapse(selection.anchorNode, selection.anchorOffset);
-          }
+          let endOffset = focusOffset;
+          selection.collapse(selection.anchorNode, anchorOffset);
 
           let direction = ["forward", "backward"];
           if (backwards) {
