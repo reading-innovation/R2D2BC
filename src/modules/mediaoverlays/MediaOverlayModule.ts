@@ -108,6 +108,7 @@ export class MediaOverlayModule implements ReaderModule {
    * otherwise turning back onto a silent page bounces the reader forward again.
    */
   private isAutoTurning = false;
+  private advanceInFlight = false;
   api?: MediaOverlayModuleAPI;
 
   public static create(config: MediaOverlayModuleConfig) {
@@ -245,26 +246,34 @@ export class MediaOverlayModule implements ReaderModule {
   }
 
   private async advanceAfterMediaOverlayOrStop(): Promise<void> {
-    const next = this.findForwardMediaOverlayLinkIndex(this.currentLinkIndex);
-    if (next >= 0) {
-      this.currentLinkIndex = next;
-      await this.playLink();
+    if (this.advanceInFlight) {
       return;
     }
-    if (this.audioElement) {
-      await this.audioElement.pause();
-    }
-    // Playback ran off the end of the spread by itself, so this is a real
-    // auto-turn and the walk may continue past pages that have no audio.
-    if (
-      this.settings.autoTurn &&
-      this.settings.playing &&
-      this.hasNextResource()
-    ) {
-      this.isAutoTurning = true;
-      this.navigator.nextResource();
-    } else {
-      await this.stopReadAloud();
+    this.advanceInFlight = true;
+    try {
+      const next = this.findForwardMediaOverlayLinkIndex(this.currentLinkIndex);
+      if (next >= 0) {
+        this.currentLinkIndex = next;
+        await this.playLink();
+        return;
+      }
+      if (this.audioElement) {
+        await this.audioElement.pause();
+      }
+      // Playback ran off the end of the spread by itself, so this is a real
+      // auto-turn and the walk may continue past pages that have no audio.
+      if (
+        this.settings.autoTurn &&
+        this.settings.playing &&
+        this.hasNextResource()
+      ) {
+        this.isAutoTurning = true;
+        this.navigator.nextResource();
+      } else {
+        await this.stopReadAloud();
+      }
+    } finally {
+      this.advanceInFlight = false;
     }
   }
 
