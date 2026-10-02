@@ -1317,6 +1317,7 @@ export class MediaOverlayModule implements ReaderModule {
             );
           }
           this.audioElement.addEventListener("timeupdate", this.ontimeupdate);
+          this.trackCurrentTime();
         }
       }
     }
