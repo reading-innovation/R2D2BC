@@ -98,6 +98,7 @@ export class MediaOverlayModule implements ReaderModule {
   private mediaOverlayRoot: MediaOverlayNode | undefined;
   private mediaOverlayTextAudioPair: MediaOverlayNode | undefined;
   private pid: string | undefined = undefined;
+  private pidLinkIndex: number | undefined = undefined;
   private __ontimeupdate = false;
 
   private mediaOverlayNodesForSegment: MediaOverlayNode[] = [];
@@ -866,7 +867,10 @@ export class MediaOverlayModule implements ReaderModule {
           this.audioElement.duration < this.currentAudioEnd &&
           this.audioElement.currentTime >= this.audioElement.duration - 0.05;
 
-        if (isEndTimeReached || isEndTimeReachedByDuration) {
+        if (
+          !this.audioElement.paused &&
+          (isEndTimeReached || isEndTimeReachedByDuration)
+        ) {
           log.log("ontimeupdate - mediaOverlaysNext()");
 
           if (
@@ -1349,7 +1353,7 @@ export class MediaOverlayModule implements ReaderModule {
     if (this.pid) {
       let prevElement;
 
-      if (this.currentLinkIndex === 0) {
+      if ((this.pidLinkIndex ?? this.currentLinkIndex) === 0) {
         prevElement = this.navigator.iframes[0].contentDocument?.getElementById(
           this.pid
         );
@@ -1375,6 +1379,7 @@ export class MediaOverlayModule implements ReaderModule {
         current.classList.add(classActive);
       }
       this.pid = id;
+      this.pidLinkIndex = this.currentLinkIndex;
     }
     if (
       current &&
