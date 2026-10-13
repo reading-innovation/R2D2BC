@@ -1062,11 +1062,15 @@ export class TextHighlighter {
         this.navigator.iframes[0].contentDocument?.body
       ).getRange();
 
-      if ((!range || range.collapsed) && toolboxAddOptions) {
+      if (!range || range.collapsed) {
         // Only force hide for `toolboxMode('add')`
-        if (getComputedStyle(toolboxAddOptions).display !== "none") {
+        if (
+          toolboxAddOptions &&
+          getComputedStyle(toolboxAddOptions).display !== "none"
+        ) {
           self.toolboxHide();
         }
+        // Without a range, selection.addRange below would throw on iOS Safari.
         return;
       }
 
