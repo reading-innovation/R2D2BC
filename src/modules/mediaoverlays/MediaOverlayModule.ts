@@ -906,6 +906,11 @@ export class MediaOverlayModule implements ReaderModule {
           }
 
           this.mediaOverlaysNext();
+          // mediaOverlaysNext() may have stopped playback (end of page), which
+          // clears the pair; this used to end the loop via a swallowed TypeError.
+          if (!this.mediaOverlayTextAudioPair) {
+            return;
+          }
         }
         const match_i = this.mediaOverlayTextAudioPair.Text.lastIndexOf("#");
         const match_id = this.mediaOverlayTextAudioPair.Text.substr(
@@ -915,7 +920,11 @@ export class MediaOverlayModule implements ReaderModule {
         this.mediaOverlayHighlight(match_id);
 
         this.myReq = requestAnimationFrame(this.trackCurrentTime.bind(this));
-      } catch (e) {}
+      } catch (e) {
+        // TEMP FIX: unexpected errors here end the rAF loop (the next timeupdate
+        // restarts it); log them so the cause can be identified.
+        log.warn("trackCurrentTime failed", e);
+      }
     }
   }
 
@@ -1238,6 +1247,15 @@ export class MediaOverlayModule implements ReaderModule {
       };
       this.audioElement.addEventListener("ended", onended);
 
+      // TEMP FIX: highlight occasionally stops while audio keeps playing (tracking
+      // loop/listener lost). Whenever playback actually (re)starts during read
+      // aloud, make sure tracking is running again.
+      this.audioElement.addEventListener("playing", () => {
+        if (this.settings.playing && this.mediaOverlayTextAudioPair) {
+          this.ensureOnTimeUpdate(false, true);
+        }
+      });
+
       this.audioElement.playbackRate = this.settings.rate;
       this.audioElement.setAttribute("src", this.currentAudioUrl);
     } else {
@@ -1318,6 +1336,11 @@ export class MediaOverlayModule implements ReaderModule {
           }
           this.audioElement.addEventListener("timeupdate", this.ontimeupdate);
           this.trackCurrentTime();
+        } else if (this.audioElement) {
+          // TEMP FIX: the flag can be true while the listener is gone (removed by
+          // cancelAutoTurn, or the audio element was recreated). Re-adding the same
+          // function reference is a no-op if it is already attached.
+          this.audioElement.addEventListener("timeupdate", this.ontimeupdate);
         }
       }
     }
